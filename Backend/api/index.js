@@ -12,7 +12,7 @@ import serverless from "serverless-http";
 const PORT = process.env.PORT || 5000;
 dotenv.config();
 const app = express();
-
+console.log("adding new log");
 // Middleware
 app.use(cors({
   origin: '*',
