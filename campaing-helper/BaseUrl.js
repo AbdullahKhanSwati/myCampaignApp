@@ -20,7 +20,10 @@
 // Current IP: UPDATE THIS WHEN YOU SWITCH NETWORKS
 // ⬇️ Replace 192.168.100.3 with your current IP ⬇️
 
-const BaseUrl = "http://192.168.100.3:5000/api/v1"; // ⚠️ UPDATE THIS IP!
+// const BaseUrl = "http://192.168.100.3:5000/api/v1"; 
+const BaseUrl = "https://my-campaign-app.vercel.app/api/v1"
+
+// ⚠️ UPDATE THIS IP!
 
 // Alternative configurations (uncomment the one you need):
 // const BaseUrl = "http://10.0.2.2:5000/api/v1"; // Android Emulator only
