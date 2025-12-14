@@ -80,9 +80,13 @@ const hashedPassword = await hashPassword(password);
 
 const loginController = async (req, res) => {
   try {
+    console.log("🔐 Login attempt received");
     const { email, password } = req.body;
+    console.log("📧 Email:", email ? "provided" : "missing");
+    console.log("🔑 Password:", password ? "provided" : "missing");
 
     if (!email || !password) {
+      console.log("❌ Missing email or password");
       return res.status(400).json({
         success: false,
         message: "Email and password are required",
@@ -90,9 +94,12 @@ const loginController = async (req, res) => {
     }
 
     // 🔍 Use query to find user
+    console.log("🔍 Searching for user with email:", email);
     const userResponse = await findUserByEmail(email);
-    console.log("response is ",userResponse);
+    console.log("📊 User search response:", userResponse.success ? "User found" : "User not found");
+    
     if (!userResponse.success || !userResponse.data) {
+      console.log("❌ User not found");
       return res.status(404).json({
         success: false,
         message: "User not found, please register first",
@@ -111,12 +118,21 @@ const loginController = async (req, res) => {
     }
 
     // 🪙 Generate JWT
+    if (!process.env.JWT_SECRET) {
+      console.error("❌ JWT_SECRET is not defined in environment variables");
+      return res.status(500).json({
+        success: false,
+        message: "Server configuration error",
+      });
+    }
+    
     const token = JWT.sign(
       { _id: user._id },
       process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
 
+    console.log("✅ Login successful for user:", user.email);
     return res.status(200).json({
       success: true,
       message: "Login successful",
@@ -130,11 +146,12 @@ const loginController = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Login error:", error);
+    console.error("❌ Login error:", error);
+    console.error("Error stack:", error.stack);
     return res.status(500).json({
       success: false,
       message: "Login error",
-      error: error.message,
+      error: process.env.NODE_ENV === "development" ? error.message : "Internal server error",
     });
   }
 };
