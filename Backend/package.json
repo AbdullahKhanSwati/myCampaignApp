@@ -8,7 +8,7 @@
 
   "description": "",
 
-  "main": "nodemon index.js",
+  "main": "api/index.js",
 
   "scripts": {
 
