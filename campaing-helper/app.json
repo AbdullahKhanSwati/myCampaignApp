@@ -23,14 +23,24 @@
         "backgroundColor": "#3b82f6"
       },
       "package": "com.abdullahg144.campainghelper",
-      "usesCleartextTraffic": true
+      "usesCleartextTraffic": true,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDA_owneIoApnQxoC4ScS4cgdtDClxTPcQ"
+        }
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "extra": {
       "eas": {
-        "projectId": "c4db1213-785d-4af7-b867-9c064b47d4d0"
+        "projectId": "55a8f405-fabf-40ab-bee6-90641d43e55c"
       }
     }
   }

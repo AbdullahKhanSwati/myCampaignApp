@@ -295,7 +295,8 @@ export default function OnboardingScreen({ navigation }) {
         formData,
         {
           headers: {
-            'Content-Type': 'multipart/form-data',
+            // Let axios and FormData automatically configure Content-Type and auto-generate the boundary
+            Accept: 'application/json',
           },
           onUploadProgress: (progressEvent) => {
             if (progressEvent.total) {

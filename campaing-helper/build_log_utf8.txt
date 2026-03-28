@@ -1,0 +1,30 @@
+﻿You don't have the required permissions to perform this operation.
+
+This can sometimes happen if you are logged in as incorrect user.
+Run eas whoami to check the username you are logged in as.
+Run eas login to change the account.
+
+Original error message: Entity not authorized: AppEntity[c4db1213-785d-4af7-b867-9c064b47d4d0] (viewer = RegularUserViewerContext[56a04630-b6f3-4ca9-ae0d-7de9b0841e6a], action = READ, ruleIndex = -1)
+Request ID: 35cb59b8-ce49-4ddf-afcf-e2676c068db0
+node.exe :     Error: 
+GraphQL request 
+failed.
+At C:\Users\Nabeel Ahm
+ad\AppData\Roaming\npm
+\eas.ps1:24 char:5
++     & "node$exe"  "$
+basedir/node_modules/e
+as-cli/bin/run" $args
++     ~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo    
+          : NotSpeci  
+  fied: (    Error:   
+  GraphQL request     
+failed.:String) [    
+], RemoteExceptio    n
+    + FullyQualifiedE 
+   rrorId : NativeCo  
+  mmandError
+ 

@@ -166,14 +166,37 @@ export default function LoginScreen({ navigation }) {
         setEmail("");
         setPassword("");
 
-        if (shouldNavigateToMain) {
-          navigation.reset({
-            index: 0,
-            routes: [{ name: "Main" }],
-          });
-        } else {
-          navigation.replace("Onboarding");
-        }
+        // Add small delay to ensure Toast is shown and state is updated
+        setTimeout(() => {
+          try {
+            if (shouldNavigateToMain) {
+              console.log("Navigating to Main screen...");
+              // Use replace instead of reset to avoid navigation stack issues
+              navigation.replace("Main");
+            } else {
+              console.log("Navigating to Onboarding screen...");
+              navigation.replace("Onboarding");
+            }
+          } catch (navigationError) {
+            console.error("Navigation error:", navigationError);
+            // Fallback navigation - try navigate instead
+            try {
+              console.log("Trying fallback navigation...");
+              if (shouldNavigateToMain) {
+                navigation.navigate("Main");
+              } else {
+                navigation.navigate("Onboarding");
+              }
+            } catch (fallbackError) {
+              console.error("Fallback navigation also failed:", fallbackError);
+              Toast.show({
+                type: "error",
+                text1: "Navigation Error",
+                text2: "Please restart the app",
+              });
+            }
+          }
+        }, 300); // Reduced to 300ms delay
       } else {
         Toast.show({
           type: "error",

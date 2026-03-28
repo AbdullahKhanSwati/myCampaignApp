@@ -742,9 +742,11 @@ export default function DashboardScreen({ navigation }) {
     undecided: 0,
     moved: 0,
   })
-  const [isLoadingStats, setIsLoadingStats] = useState(false)
+  const [isLoadingStats, setIsLoadingStats] = useState(true) // Start with true to show loading
   const [daysUntilElection, setDaysUntilElection] = useState(0)
   const [electionDate, setElectionDate] = useState(null)
+  const [hasError, setHasError] = useState(false)
+  const [isMounted, setIsMounted] = useState(false)
 
   const loadVolunteerStatus = async () => {
     try {
@@ -774,28 +776,48 @@ export default function DashboardScreen({ navigation }) {
 
   // Also load on initial mount
   useEffect(() => {
-    loadVolunteerStatus()
+    setIsMounted(true)
+    try {
+      loadVolunteerStatus()
+    } catch (error) {
+      console.error("Error loading volunteer status on mount:", error)
+    }
+    return () => setIsMounted(false)
   }, [])
 
   const fetchCampaignData = useCallback(async () => {
     try {
       const storedCampaign = await AsyncStorage.getItem("currentCampaign")
       if (storedCampaign) {
-        const campaignData = JSON.parse(storedCampaign)
+        let campaignData;
+        try {
+          campaignData = JSON.parse(storedCampaign)
+        } catch (parseError) {
+          console.error("Error parsing campaign data in fetchCampaignData:", parseError)
+          return
+        }
         setCampaign(campaignData)
         
         // Set election date
         if (campaignData.electionDate) {
-          const election = new Date(campaignData.electionDate)
-          setElectionDate(election)
-          
-          // Calculate days until election
-          const today = new Date()
-          today.setHours(0, 0, 0, 0)
-          election.setHours(0, 0, 0, 0)
-          const diffTime = election - today
-          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-          setDaysUntilElection(diffDays >= 0 ? diffDays : 0)
+          try {
+            const election = new Date(campaignData.electionDate)
+            if (election instanceof Date && !isNaN(election.getTime())) {
+              setElectionDate(election)
+              
+              // Calculate days until election
+              const today = new Date()
+              today.setHours(0, 0, 0, 0)
+              election.setHours(0, 0, 0, 0)
+              const diffTime = election - today
+              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+              setDaysUntilElection(diffDays >= 0 ? diffDays : 0)
+            }
+          } catch (dateError) {
+            console.error("Error parsing election date:", dateError)
+            setElectionDate(null)
+            setDaysUntilElection(0)
+          }
         }
       }
     } catch (error) {
@@ -804,6 +826,7 @@ export default function DashboardScreen({ navigation }) {
   }, [])
 
   const fetchVoterStats = useCallback(async () => {
+    if (!isMounted) return
     try {
       setIsLoadingStats(true)
       const storedCampaign = await AsyncStorage.getItem("currentCampaign")
@@ -821,17 +844,50 @@ export default function DashboardScreen({ navigation }) {
         return
       }
 
-      const campaignData = JSON.parse(storedCampaign)
+      let campaignData;
+      try {
+        campaignData = JSON.parse(storedCampaign)
+      } catch (parseError) {
+        console.error("Error parsing campaign data:", parseError)
+        setStats({
+          totalVoters: 0,
+          knockedVoters: 0,
+          supporters: 0,
+          opposed: 0,
+          undecided: 0,
+          moved: 0,
+        })
+        return
+      }
+
       const campaignId = campaignData._id || campaignData.id
+      
+      if (!campaignId) {
+        console.error("No campaign ID found")
+        setStats({
+          totalVoters: 0,
+          knockedVoters: 0,
+          supporters: 0,
+          opposed: 0,
+          undecided: 0,
+          moved: 0,
+        })
+        return
+      }
       
       // Build query params
       const params = { campaignId }
       
       // If volunteer has selected route, filter by route
       if (selectedRoute) {
-        const routeData = JSON.parse(selectedRoute)
-        if (routeData.routeId) {
-          params.routeId = routeData.routeId
+        try {
+          const routeData = JSON.parse(selectedRoute)
+          if (routeData && routeData.routeId) {
+            params.routeId = routeData.routeId
+          }
+        } catch (routeParseError) {
+          console.error("Error parsing selected route:", routeParseError)
+          // Continue without route filter
         }
       }
       
@@ -864,6 +920,7 @@ export default function DashboardScreen({ navigation }) {
       }
     } catch (error) {
       console.error("Error fetching voter stats:", error)
+      setHasError(true)
       setStats({
         totalVoters: 0,
         knockedVoters: 0,
@@ -873,34 +930,44 @@ export default function DashboardScreen({ navigation }) {
         moved: 0,
       })
     } finally {
-      setIsLoadingStats(false)
+      if (isMounted) {
+        setIsLoadingStats(false)
+      }
     }
-  }, [])
+  }, [isMounted])
 
   // Fetch data when screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      fetchCampaignData()
-      fetchVoterStats()
+      try {
+        fetchCampaignData()
+        fetchVoterStats()
+      } catch (error) {
+        console.error("Error in useFocusEffect:", error)
+      }
     }, [fetchCampaignData, fetchVoterStats])
   )
 
   // Also fetch on initial mount
   useEffect(() => {
-    fetchCampaignData()
-    fetchVoterStats()
+    try {
+      fetchCampaignData()
+      fetchVoterStats()
+    } catch (error) {
+      console.error("Error in initial mount useEffect:", error)
+    }
   }, [fetchCampaignData, fetchVoterStats])
 
-  // ✅ Chart data must be in correct structure - using dynamic stats
+  // ✅ Chart data must be in correct structure - using dynamic stats with safe defaults
   const voterStatusData = {
     labels: ["Supporters", "Opposed", "Undecided", "Moved"],
     datasets: [
       {
         data: [
-          stats.supporters,
-          stats.opposed,
-          stats.undecided,
-          stats.moved,
+          stats.supporters || 0,
+          stats.opposed || 0,
+          stats.undecided || 0,
+          stats.moved || 0,
         ],
       },
     ],
@@ -909,28 +976,28 @@ export default function DashboardScreen({ navigation }) {
   const pieChartData = [
     {
       name: "Supporters",
-      population: stats.supporters,
+      population: stats.supporters || 0,
       color: "#059669",
       legendFontColor: "#FFFFFF",
       legendFontSize: 14,
     },
     {
       name: "Opposed",
-      population: stats.opposed,
+      population: stats.opposed || 0,
       color: "#DC2626",
       legendFontColor: "#FFFFFF",
       legendFontSize: 14,
     },
     {
       name: "Undecided",
-      population: stats.undecided,
+      population: stats.undecided || 0,
       color: "#CA8A04",
       legendFontColor: "#FFFFFF",
       legendFontSize: 14,
     },
     {
       name: "Moved",
-      population: stats.moved,
+      population: stats.moved || 0,
       color: "#6B7280",
       legendFontColor: "#FFFFFF",
       legendFontSize: 14,
@@ -939,15 +1006,16 @@ export default function DashboardScreen({ navigation }) {
 
   // Progress data - showing supporter growth over time
   // For now, using current stats. Can be enhanced with historical data later
+  const supportersValue = stats.supporters || 0;
   const progressData = {
     labels: ["Week 1", "Week 2", "Week 3", "Week 4"],
     datasets: [
       {
         data: [
-          Math.round(stats.supporters * 0.25),
-          Math.round(stats.supporters * 0.5),
-          Math.round(stats.supporters * 0.75),
-          stats.supporters,
+          Math.round(supportersValue * 0.25) || 0,
+          Math.round(supportersValue * 0.5) || 0,
+          Math.round(supportersValue * 0.75) || 0,
+          supportersValue || 0,
         ],
         strokeWidth: 3,
       },
@@ -970,6 +1038,28 @@ export default function DashboardScreen({ navigation }) {
     },
   }
 
+  // Show error state if there's an error
+  if (hasError && !isLoadingStats) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>Unable to load dashboard data</Text>
+          <TouchableOpacity 
+            style={styles.retryButton}
+            onPress={() => {
+              setHasError(false)
+              setIsLoadingStats(true)
+              fetchCampaignData()
+              fetchVoterStats()
+            }}
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    )
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView}>
@@ -982,21 +1072,37 @@ export default function DashboardScreen({ navigation }) {
                 {campaign ? `${campaign.type || "Campaign"} - ${campaign.city || ""}` : "Campaign"}
               </Text>
             </View>
-            <TouchableOpacity onPress={() => navigation.openDrawer()}>
+            <TouchableOpacity onPress={() => {
+              try {
+                if (navigation && navigation.openDrawer) {
+                  navigation.openDrawer()
+                }
+              } catch (error) {
+                console.error("Error opening drawer:", error)
+              }
+            }}>
               <Text style={styles.menuIcon}>☰</Text>
             </TouchableOpacity>
           </View>
 
           <View style={styles.electionCountdown}>
             <Text style={styles.countdownText}>
-              {daysUntilElection} Days Until Election
+              {daysUntilElection || 0} Days Until Election
             </Text>
             <Text style={styles.electionDate}>
-              {electionDate ? electionDate.toLocaleDateString('en-US', { 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-              }) : "No date set"}
+              {electionDate && electionDate instanceof Date && !isNaN(electionDate.getTime()) 
+                ? (() => {
+                    try {
+                      return electionDate.toLocaleDateString('en-US', { 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                      })
+                    } catch (e) {
+                      return electionDate.toISOString().split('T')[0]
+                    }
+                  })()
+                : "No date set"}
             </Text>
           </View>
         </View>
@@ -1007,13 +1113,13 @@ export default function DashboardScreen({ navigation }) {
           <View style={styles.keyStatsRow}>
             <View style={[styles.keyStatCard, styles.primaryCard]}>
               <Text style={styles.keyStatNumber}>
-                {isLoadingStats ? "..." : stats.totalVoters.toLocaleString()}
+                {isLoadingStats ? "..." : (stats.totalVoters || 0).toLocaleString()}
               </Text>
               <Text style={styles.keyStatLabel}>Total Voters</Text>
             </View>
             <View style={[styles.keyStatCard, styles.successCard]}>
               <Text style={styles.keyStatNumber}>
-                {isLoadingStats ? "..." : stats.knockedVoters.toLocaleString()}
+                {isLoadingStats ? "..." : (stats.knockedVoters || 0).toLocaleString()}
               </Text>
               <Text style={styles.keyStatLabel}>Contacted</Text>
             </View>
@@ -1021,53 +1127,116 @@ export default function DashboardScreen({ navigation }) {
         </View>
 
         {/* Bar Chart */}
-        <View style={styles.chartSection}>
-          <Text style={styles.sectionTitle}>Voter Status Breakdown</Text>
-          <View style={styles.chartContainer}>
-            <BarChart
-              data={voterStatusData}
-              width={screenWidth - 48}
-              height={220}
-              chartConfig={chartConfig}
-              style={styles.chart}
-              fromZero
-              showValuesOnTopOfBars
-            />
+        {!isLoadingStats && (
+          <View style={styles.chartSection}>
+            <Text style={styles.sectionTitle}>Voter Status Breakdown</Text>
+            <View style={styles.chartContainer}>
+              {voterStatusData && voterStatusData.datasets && voterStatusData.datasets[0] ? (
+                (() => {
+                  try {
+                    return (
+                      <BarChart
+                        data={voterStatusData}
+                        width={Math.max(screenWidth - 48, 300)}
+                        height={220}
+                        chartConfig={chartConfig}
+                        style={styles.chart}
+                        fromZero
+                        showValuesOnTopOfBars
+                      />
+                    )
+                  } catch (chartError) {
+                    console.error("Error rendering BarChart:", chartError)
+                    return (
+                      <View style={styles.chartPlaceholder}>
+                        <Text style={styles.chartPlaceholderText}>Chart unavailable</Text>
+                      </View>
+                    )
+                  }
+                })()
+              ) : (
+                <View style={styles.chartPlaceholder}>
+                  <Text style={styles.chartPlaceholderText}>No data available</Text>
+                </View>
+              )}
+            </View>
           </View>
-        </View>
+        )}
 
         {/* Pie Chart */}
-        <View style={styles.chartSection}>
-          <Text style={styles.sectionTitle}>Voter Distribution</Text>
-          <View style={styles.chartContainer}>
-            <PieChart
-              data={pieChartData}
-              width={screenWidth - 48}
-              height={220}
-              chartConfig={chartConfig}
-              accessor="population"
-              backgroundColor="transparent"
-              paddingLeft="12"
-              style={styles.chart}
-              absolute
-            />
+        {!isLoadingStats && pieChartData && pieChartData.length > 0 && (
+          <View style={styles.chartSection}>
+            <Text style={styles.sectionTitle}>Voter Distribution</Text>
+            <View style={styles.chartContainer}>
+              {pieChartData.some(item => item.population > 0) ? (
+                (() => {
+                  try {
+                    return (
+                      <PieChart
+                        data={pieChartData}
+                        width={Math.max(screenWidth - 48, 300)}
+                        height={220}
+                        chartConfig={chartConfig}
+                        accessor="population"
+                        backgroundColor="transparent"
+                        paddingLeft="12"
+                        style={styles.chart}
+                        absolute
+                      />
+                    )
+                  } catch (chartError) {
+                    console.error("Error rendering PieChart:", chartError)
+                    return (
+                      <View style={styles.chartPlaceholder}>
+                        <Text style={styles.chartPlaceholderText}>Chart unavailable</Text>
+                      </View>
+                    )
+                  }
+                })()
+              ) : (
+                <View style={styles.chartPlaceholder}>
+                  <Text style={styles.chartPlaceholderText}>No data available</Text>
+                </View>
+              )}
+            </View>
           </View>
-        </View>
+        )}
 
         {/* Line Chart */}
-        <View style={styles.chartSection}>
-          <Text style={styles.sectionTitle}>Supporter Growth</Text>
-          <View style={styles.chartContainer}>
-            <LineChart
-              data={progressData}
-              width={screenWidth - 48}
-              height={220}
-              chartConfig={chartConfig}
-              style={styles.chart}
-              bezier
-            />
+        {!isLoadingStats && progressData && progressData.datasets && (
+          <View style={styles.chartSection}>
+            <Text style={styles.sectionTitle}>Supporter Growth</Text>
+            <View style={styles.chartContainer}>
+              {progressData.datasets[0] && progressData.datasets[0].data ? (
+                (() => {
+                  try {
+                    return (
+                      <LineChart
+                        data={progressData}
+                        width={Math.max(screenWidth - 48, 300)}
+                        height={220}
+                        chartConfig={chartConfig}
+                        style={styles.chart}
+                        bezier
+                      />
+                    )
+                  } catch (chartError) {
+                    console.error("Error rendering LineChart:", chartError)
+                    return (
+                      <View style={styles.chartPlaceholder}>
+                        <Text style={styles.chartPlaceholderText}>Chart unavailable</Text>
+                      </View>
+                    )
+                  }
+                })()
+              ) : (
+                <View style={styles.chartPlaceholder}>
+                  <Text style={styles.chartPlaceholderText}>No data available</Text>
+                </View>
+              )}
+            </View>
           </View>
-        </View>
+        )}
 
         {/* Quick Actions */}
         <View style={styles.actionsSection}>
@@ -1079,8 +1248,12 @@ export default function DashboardScreen({ navigation }) {
                 (isVolunteer && !hasSelectedRoute) && styles.actionCardDisabled
               ]}
               onPress={() => {
-                if (!(isVolunteer && !hasSelectedRoute)) {
-                  navigation.navigate("VoterList")
+                try {
+                  if (!(isVolunteer && !hasSelectedRoute) && navigation && navigation.navigate) {
+                    navigation.navigate("VoterList")
+                  }
+                } catch (error) {
+                  console.error("Error navigating to VoterList:", error)
                 }
               }}
               disabled={isVolunteer && !hasSelectedRoute}
@@ -1113,8 +1286,12 @@ export default function DashboardScreen({ navigation }) {
                 (isVolunteer && !hasSelectedRoute) && styles.actionCardDisabled
               ]}
               onPress={() => {
-                if (!(isVolunteer && !hasSelectedRoute)) {
-                  navigation.navigate("Canvassing")
+                try {
+                  if (!(isVolunteer && !hasSelectedRoute) && navigation && navigation.navigate) {
+                    navigation.navigate("Canvassing")
+                  }
+                } catch (error) {
+                  console.error("Error navigating to Canvassing:", error)
                 }
               }}
               disabled={isVolunteer && !hasSelectedRoute}
@@ -1148,8 +1325,12 @@ export default function DashboardScreen({ navigation }) {
                 isVolunteer && styles.actionCardDisabled
               ]}
               onPress={() => {
-                if (!isVolunteer) {
-                  navigation.navigate("Volunteer")
+                try {
+                  if (!isVolunteer && navigation && navigation.navigate) {
+                    navigation.navigate("Volunteer")
+                  }
+                } catch (error) {
+                  console.error("Error navigating to Volunteer:", error)
                 }
               }}
               disabled={isVolunteer}
@@ -1189,6 +1370,29 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  errorText: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    marginBottom: 24,
+    textAlign: "center",
+  },
+  retryButton: {
+    backgroundColor: "#931b1bff",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
   },
   header: {
     backgroundColor: "#931b1bff",
@@ -1283,6 +1487,15 @@ const styles = StyleSheet.create({
   },
   chart: {
     borderRadius: 16,
+  },
+  chartPlaceholder: {
+    height: 220,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  chartPlaceholderText: {
+    color: "#9CA3AF",
+    fontSize: 16,
   },
   actionsSection: {
     paddingHorizontal: 24,
